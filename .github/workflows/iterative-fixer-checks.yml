@@ -1,0 +1,26 @@
+name: Iterative fixer checks
+
+on:
+  push:
+    branches:
+      - fixer/iterative-agent
+    paths:
+      - "fixers/iterative/**"
+      - ".github/workflows/iterative-fixer-checks.yml"
+  pull_request:
+    paths:
+      - "fixers/iterative/**"
+      - ".github/workflows/iterative-fixer-checks.yml"
+
+jobs:
+  python-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile fixer and tests
+        run: python -m py_compile fixers/iterative/fix.py fixers/iterative/test_fix.py
+      - name: Run fixer unit tests
+        run: python -m pytest -q fixers/iterative/test_fix.py
