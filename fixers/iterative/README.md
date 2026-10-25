@@ -7,13 +7,20 @@ An evidence-driven alternative to `fixers/examples/minimal-llm`. It gathers the 
 From the repository root:
 
 ```sh
+python3 -m pip install pytest pyyaml
+python3 -m py_compile fixers/iterative/fix.py fixers/iterative/test_fix.py
 python3 -m pytest -q fixers/iterative/test_fix.py
+
+# Optional directory mode requires an executable run.sh after checkout:
+chmod +x fixers/iterative/run.sh
 ./grade.sh --fixer fixers/iterative --cases practice/A2
+
+# Recommended: grade the actual Docker image you'll submit
 docker build --platform linux/amd64 -t c3-fixer-iterative fixers/iterative
 ./grade.sh --fixer c3-fixer-iterative --cases practice/A2
 ./grade.sh --fixer c3-fixer-iterative
 ```
 
-The directory-mode command runs locally (without the Docker sandbox), so grade the built image before submitting. The runtime requires the grader-provided `C3_WORKSPACE`, `C3_CORPUS`, `C3_DEADLINE`, `C3_BUDGET_USD`, `OPENAI_BASE_URL`, and a proxy token. It does not hard-code a repository path or make any edits outside `src/`.
+The runtime requires grader-provided `C3_WORKSPACE`, `C3_CORPUS`, `C3_DEADLINE`, `C3_BUDGET_USD`, `OPENAI_BASE_URL`, and a proxy token. It does not hard-code a repository path or make edits outside `src/`.
 
-The unit tests check path restrictions and patch-snapshot restoration. These are not a substitute for running every practice case through `grade.sh`.
+The unit tests check patch parsing, source-path restrictions, snapshot restoration and corpus-term extraction. They are not a substitute for running every practice case through `grade.sh`.
