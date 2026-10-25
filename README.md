@@ -135,3 +135,4 @@ Send us:
 
 You have **7 days** from receiving the pack. We expect it to take 2–3 hours. More time is fine but
 not expected.
+# c3-startup-test
