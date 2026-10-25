@@ -20,6 +20,9 @@ Rules:
 - Prefer platform/service documents marked CURRENT over SUPERSEDED documents.
 - Consider loss, duplication, reordering, delays, restarts, pauses, clock drift, retries,
   idempotency, fencing, durability and terminal-state races where relevant.
+- Revalidate lease validity immediately before every lease-protected send, including each retry
+  after timeouts or backoff; never continue a retry loop after expiry.
+- Keep capacity reserved until a GPU release is observably complete, not just requested/acknowledged.
 - Maintain existing interfaces and compatibility with the codebase.
 Return only complete replacement/new source files in this format:
 === FILE: src/relative/path.py ===
@@ -37,7 +40,13 @@ def read(p, limit=None, tail=False):
     return s
 def run(argv, seconds, label):
     if seconds <= 0: return {"label":label,"returncode":None,"timeout":True,"output":"time limit"}
-    env=os.environ.copy(); old=env.get("PYTHONPATH",""); env["PYTHONPATH"]=str(SRC)+(os.pathsep+old if old else "")
+    env=os.environ.copy()
+    old=[p for p in env.get("PYTHONPATH","").split(os.pathsep) if p]
+    # Mirror the grader's clean import path: case root, service source, then simulator.
+    parts=[str(WS), str(SRC), str(WS/"sim")]
+    env["PYTHONPATH"]=os.pathsep.join(dict.fromkeys(parts+old))
+    env["PYTHONHASHSEED"]="0"
+    env["PYTHONDONTWRITEBYTECODE"]="1"
     try:
         p=subprocess.run(argv,cwd=WS,env=env,capture_output=True,text=True,timeout=max(1,seconds))
         out=(p.stdout or "")+("\n--- stderr ---\n"+p.stderr if p.stderr else "")
@@ -134,6 +143,13 @@ def gather_source():
     return "".join(parts)
 def diagnostics_text(ds):
     return "\n".join(f"\n## {x['label']} | exit={x['returncode']} | timeout={x['timeout']}\n{x['output']}" for x in ds)[:17000]
+def log_check_failures(ds):
+    """Expose actionable child-process errors in fixer.log, not just exit codes."""
+    for d in ds:
+        if d["timeout"] or d["returncode"] not in (0, None):
+            output=(d.get("output") or "").strip()
+            if output:
+                log(f"CHECK DETAIL [{d['label']}]: {output[-1800:]}")
 def model(prompt):
     base=os.environ.get("OPENAI_BASE_URL","").rstrip("/")
     key=os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
@@ -204,6 +220,7 @@ def main():
     original=snapshot()
     base=checks("baseline",seeds)
     log("Baseline: "+"; ".join(f"{d['label']}={d['returncode']}" for d in base))
+    log_check_failures(base)
     reply=model(prompt(case,source,docs,base))
     if not reply or not apply(reply): log("No patch applied."); return 0
     latest=checks("patched-1",seeds)
@@ -212,6 +229,7 @@ def main():
     sim=[d for d in latest if ": invariant check " in d["label"]]
     sim_ok=bool(sim) and all(d["returncode"]==0 and not d["timeout"] for d in sim)
     log("Patched-1: "+"; ".join(f"{d['label']}={d['returncode']}" for d in latest))
+    log_check_failures(latest)
     if remaining()>150 and (not test_ok or not sim_ok):
         prior=snapshot(); src2=gather_source()
         note="Inspect the latest applied patch and validation output; return only needed src files. "
@@ -220,6 +238,8 @@ def main():
         reply2=model(prompt(case,src2,docs,latest,note))
         if reply2 and apply(reply2):
             second=checks("patched-2",seeds); t2=next((d for d in second if d["label"].endswith(": pytest")),None)
+            log("Patched-2: "+"; ".join(f"{d['label']}={d['returncode']}" for d in second))
+            log_check_failures(second)
             if t2 and t2["returncode"]==0 and not t2["timeout"]:
                 latest=second; log("Kept refinement: public pytest passes.")
             else:
