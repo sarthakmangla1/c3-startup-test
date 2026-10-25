@@ -12,17 +12,17 @@ def test_parser_and_path_guard():
 print('ok')
 === END ===
 """
-    assert fix.parse_files(reply) == [("src/pkg/a.py", "print('ok')")]
+    assert fix.parse(reply) == [("src/pkg/a.py", "print('ok')")]
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp).resolve()
         old_ws, old_src = fix.WS, fix.SRC
         try:
             fix.WS = root
             fix.SRC = root / "src"
-            assert fix.safe_target("src/pkg/a.py") == root / "src/pkg/a.py"
-            assert fix.safe_target("src/../../oops.py") is None
-            assert fix.safe_target("README.md") is None
-            assert fix.safe_target("src/pkg/data.bin") is None
+            assert fix.target_for("src/pkg/a.py") == root / "src/pkg/a.py"
+            assert fix.target_for("src/../../outside.py") is None
+            assert fix.target_for("README.md") is None
+            assert fix.target_for("src/pkg/data.bin") is None
         finally:
             fix.WS, fix.SRC = old_ws, old_src
 
@@ -37,10 +37,10 @@ def test_snapshot_restore():
             a = fix.SRC / "pkg" / "a.py"
             a.parent.mkdir(parents=True)
             a.write_text("original\n")
-            snap = fix.snapshot_src()
+            snap = fix.snapshot()
             a.write_text("broken\n")
             (fix.SRC / "new.py").write_text("extra\n")
-            fix.restore_src(snap)
+            fix.restore(snap)
             assert a.read_text() == "original\n"
             assert not (fix.SRC / "new.py").exists()
         finally:
@@ -48,6 +48,6 @@ def test_snapshot_restore():
 
 
 def test_terms_include_protocol_identifiers():
-    terms = fix.token_terms("lease_report_after_pause lease_fenced duplicate RPC timeout")
-    assert "lease_report_after_pause" in terms
-    assert "lease_fenced" in terms
+    found = fix.terms("lease_report_after_pause lease_fenced duplicate RPC timeout")
+    assert "lease_report_after_pause" in found
+    assert "lease_fenced" in found
