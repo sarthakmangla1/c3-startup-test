@@ -13,7 +13,8 @@ python3 -m pytest -q fixers/iterative/test_fix.py
 
 # Optional directory mode requires an executable run.sh after checkout:
 chmod +x fixers/iterative/run.sh
-./grade.sh --fixer fixers/iterative --cases practice/A2
+# Use the same venv for the local fixer process, not only for grade.sh
+PATH="$PWD/grader/.venv/bin:$PATH" ./grade.sh --fixer fixers/iterative --cases practice/A2
 
 # Recommended: grade the actual Docker image you'll submit
 docker build --platform linux/amd64 -t c3-fixer-iterative fixers/iterative
